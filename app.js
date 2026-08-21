@@ -23,13 +23,21 @@ const defaultState = {
 };
 
 const supabaseConfig = window.BUDGET_SUPABASE_CONFIG || {};
-const supabase =
-  supabaseConfig.url &&
-  supabaseConfig.anonKey &&
-  supabaseConfig.url !== 'https://YOUR-PROJECT-ID.supabase.co' &&
-  supabaseConfig.anonKey !== 'YOUR_SUPABASE_ANON_KEY'
-    ? window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey)
-    : null;
+let supabase = null;
+try {
+  if (
+    supabaseConfig.url &&
+    supabaseConfig.anonKey &&
+    supabaseConfig.url !== 'https://YOUR-PROJECT-ID.supabase.co' &&
+    supabaseConfig.anonKey !== 'YOUR_SUPABASE_ANON_KEY' &&
+    window.supabase
+  ) {
+    supabase = window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey);
+  }
+} catch (error) {
+  console.warn('Supabase client failed to initialize, continuing without sync.', error);
+  supabase = null;
+}
 
 let state = cloneData(defaultState);
 
