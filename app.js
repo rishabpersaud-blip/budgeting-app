@@ -75,6 +75,10 @@ async function loadState() {
         return normalizeState(data);
       }
 
+      if (error && error.code !== 'PGRST116') {
+        console.warn('Supabase query failed.', error);
+      }
+
       const localSaved = localStorage.getItem(STORAGE_KEY);
       if (localSaved) {
         try {
@@ -85,6 +89,10 @@ async function loadState() {
           console.warn('Unable to mirror local state to Supabase.', localError);
         }
       }
+
+      const seededState = cloneData(defaultState);
+      await saveStateToSupabase(seededState);
+      return seededState;
     } catch (error) {
       console.warn('Supabase load failed, falling back to local storage.', error);
     }
