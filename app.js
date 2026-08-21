@@ -330,14 +330,13 @@ function saveIncome() {
 }
 
 function resetAll() {
-  const shouldReset = window.confirm('Reset your monthly budget data?');
+  const shouldReset = window.confirm('Clear all logged expenses for this month? Your income and category budgets will stay the same.');
 
   if (!shouldReset) {
     return;
   }
 
-  const freshState = cloneData(defaultState);
-  Object.assign(state, freshState);
+  state.expenses = [];
   saveState();
   render();
 }
