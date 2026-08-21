@@ -54,7 +54,8 @@ const elements = {
   expenseDateInput: document.querySelector('#expenseDateInput'),
   categoryList: document.querySelector('#categoryList'),
   expenseList: document.querySelector('#expenseList'),
-  resetDataBtn: document.querySelector('#resetDataBtn')
+  resetDataBtn: document.querySelector('#resetDataBtn'),
+  statusStamp: document.querySelector('#statusStamp')
 };
 
 initialize();
@@ -211,32 +212,56 @@ function renderSummary() {
   elements.budgetedValue.textContent = formatMoney(totalBudget);
   elements.spentValue.textContent = formatMoney(totalSpent);
   elements.leftValue.textContent = formatMoney(remaining);
+
+  renderStamp(remaining, totalSpent);
+}
+
+function renderStamp(remaining, totalSpent) {
+  if (!elements.statusStamp) {
+    return;
+  }
+
+  const spentRatio = state.income > 0 ? totalSpent / state.income : 0;
+  let label = 'On track';
+  let statusClass = 'good';
+
+  if (remaining < 0) {
+    label = 'Over budget';
+    statusClass = 'danger';
+  } else if (spentRatio >= 0.85) {
+    label = 'Cutting it close';
+    statusClass = 'warning';
+  }
+
+  elements.statusStamp.className = `stamp ${statusClass}`;
+  elements.statusStamp.querySelector('span').textContent = label;
 }
 
 function renderCategories() {
   elements.categoryList.innerHTML = state.categories
     .map((category) => {
       const spent = getCategorySpent(category.id);
-      const ratio = Math.min((spent / Math.max(category.budget || 1, 1)) * 100, 100);
-      const statusClass = spent > category.budget ? 'danger' : spent > category.budget * 0.8 ? 'warning' : '';
+      const budget = Number(category.budget || 0);
+      const ratio = Math.min((spent / Math.max(budget || 1, 1)) * 100, 100);
+      const statusClass = spent > budget ? 'danger' : spent > budget * 0.8 ? 'warning' : '';
 
       return `
         <div class="category-item">
-          <div class="category-head">
-            <div>
-              <div class="category-name">${category.name}</div>
-              <div class="category-meta">${formatMoney(spent)} spent</div>
+          <div class="cat-info">
+            <span class="category-name">${category.name}</span>
+            <span class="category-meta">${formatMoney(spent)} of ${formatMoney(budget)}</span>
+          </div>
+
+          <div class="cat-progress">
+            <div class="progress-wrap">
+              <div class="progress-bar ${statusClass}" style="width: ${Math.min(ratio, 100)}%"></div>
             </div>
-            <div class="category-meta">${formatMoney(Number(category.budget || 0))} budget</div>
           </div>
 
-          <div class="progress-wrap">
-            <div class="progress-bar ${statusClass}" style="width: ${Math.min(ratio, 100)}%"></div>
-          </div>
-
-          <div class="category-budget-row">
-            <span>Budget:</span>
-            <input type="number" min="0" step="0.01" value="${Number(category.budget || 0)}" data-category-id="${category.id}" aria-label="${category.name} budget" />
+          <div class="cat-budget">
+            <span class="cat-budget-label">Budget</span>
+            <span class="cat-budget-currency">$</span>
+            <input type="number" min="0" step="0.01" value="${budget}" data-category-id="${category.id}" aria-label="${category.name} budget" />
           </div>
         </div>
       `;
@@ -274,13 +299,14 @@ function renderExpenses() {
         <li class="expense-item">
           <div class="expense-main">
             <span class="expense-title">${escapeHtml(expense.description)}</span>
-            <div class="expense-info">
-              <span>${getCategoryName(expense.category)}</span>
-              <span>${formatDate(expense.date)}</span>
-            </div>
+            <span class="expense-leader" aria-hidden="true"></span>
+            <span class="expense-amount">${formatMoney(expense.amount)}</span>
           </div>
-          <div class="expense-amount">${formatMoney(expense.amount)}</div>
-          <button class="delete-button" type="button" data-delete-id="${expense.id}">Delete</button>
+          <div class="expense-info">
+            <span>${getCategoryName(expense.category)}</span>
+            <span>${formatDate(expense.date)}</span>
+            <button class="delete-button" type="button" data-delete-id="${expense.id}">Remove</button>
+          </div>
         </li>
       `
     )

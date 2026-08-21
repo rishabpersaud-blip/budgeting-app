@@ -3,8 +3,8 @@
   "short_name": "Budget",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#f5f7ff",
-  "theme_color": "#4f46e5",
+  "background_color": "#ece5d4",
+  "theme_color": "#1f2a2e",
   "description": "Track monthly expenses, set category budgets, and monitor your remaining cash.",
   "icons": [
     {
