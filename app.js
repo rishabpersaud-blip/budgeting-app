@@ -23,7 +23,7 @@ const defaultState = {
 };
 
 const supabaseConfig = window.BUDGET_SUPABASE_CONFIG || {};
-let supabase = null;
+let supabaseClient = null;
 try {
   if (
     supabaseConfig.url &&
@@ -32,11 +32,11 @@ try {
     supabaseConfig.anonKey !== 'YOUR_SUPABASE_ANON_KEY' &&
     window.supabase
   ) {
-    supabase = window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey);
+    supabaseClient = window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey);
   }
 } catch (error) {
   console.warn('Supabase client failed to initialize, continuing without sync.', error);
-  supabase = null;
+  supabaseClient = null;
 }
 
 let state = cloneData(defaultState);
@@ -80,9 +80,9 @@ async function initialize() {
 }
 
 async function loadState() {
-  if (supabase) {
+  if (supabaseClient) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('budget_data')
         .select('*')
         .eq('id', 'default')
@@ -164,12 +164,12 @@ async function saveStateFromData(data) {
 }
 
 async function saveStateToSupabase(data) {
-  if (!supabase) {
+  if (!supabaseClient) {
     return;
   }
 
   try {
-    await supabase.from('budget_data').upsert({
+    await supabaseClient.from('budget_data').upsert({
       id: 'default',
       income: Number(data.income) || 0,
       categories: data.categories,
