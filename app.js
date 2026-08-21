@@ -53,7 +53,16 @@ initialize();
 
 async function initialize() {
   const defaultDate = todayISO();
-  state = await loadState();
+
+  try {
+    state = await loadState();
+  } catch (error) {
+    console.warn('State load failed entirely, using defaults.', error);
+    state = cloneData(defaultState);
+  }
+
+  state = normalizeState(state);
+
   elements.expenseDateInput.value = defaultDate;
   elements.monthlyIncomeInput.value = state.income;
   elements.expenseForm.addEventListener('submit', handleExpenseSubmit);
@@ -116,9 +125,24 @@ function normalizeState(payload) {
   const source = payload || {};
   return {
     income: Number(source.income) || defaultState.income,
-    categories: Array.isArray(source.categories) && source.categories.length ? source.categories : defaultCategories,
+    categories: mergeCategories(source.categories),
     expenses: Array.isArray(source.expenses) ? source.expenses : []
   };
+}
+
+function mergeCategories(savedCategories) {
+  const saved = Array.isArray(savedCategories) ? savedCategories : [];
+  const savedById = new Map(saved.filter((category) => category && category.id).map((category) => [category.id, category]));
+
+  const merged = defaultCategories.map((defaultCategory) => savedById.get(defaultCategory.id) || defaultCategory);
+
+  saved.forEach((category) => {
+    if (category && category.id && !defaultCategories.some((defaultCategory) => defaultCategory.id === category.id)) {
+      merged.push(category);
+    }
+  });
+
+  return merged;
 }
 
 async function saveState() {
@@ -362,5 +386,9 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch((error) => {
       console.warn('Service worker registration failed:', error);
     });
+  });
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    window.location.reload();
   });
 }
