@@ -1,4 +1,4 @@
-const CACHE_NAME = 'budget-planner-v1';
+const CACHE_NAME = 'budget-planner-v2';
 const APP_SHELL = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -26,17 +26,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
+  if (event.request.url.startsWith('chrome-extension://')) {
+    return;
+  }
 
-      return fetch(event.request).then((networkResponse) => {
-        const responseClone = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+  event.respondWith(
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (event.request.url.startsWith(self.location.origin)) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+        }
         return networkResponse;
-      }).catch(() => caches.match('./index.html'));
-    })
+      })
+      .catch(() => caches.match(event.request).then((cachedResponse) => cachedResponse || caches.match('./index.html')))
   );
 });

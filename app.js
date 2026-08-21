@@ -22,7 +22,16 @@ const defaultState = {
   categories: defaultCategories
 };
 
-const state = loadState();
+const supabaseConfig = window.BUDGET_SUPABASE_CONFIG || {};
+const supabase =
+  supabaseConfig.url &&
+  supabaseConfig.anonKey &&
+  supabaseConfig.url !== 'https://YOUR-PROJECT-ID.supabase.co' &&
+  supabaseConfig.anonKey !== 'YOUR_SUPABASE_ANON_KEY'
+    ? window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey)
+    : null;
+
+let state = cloneData(defaultState);
 
 const elements = {
   monthlyIncomeInput: document.querySelector('#monthlyIncomeInput'),
@@ -42,8 +51,9 @@ const elements = {
 
 initialize();
 
-function initialize() {
+async function initialize() {
   const defaultDate = todayISO();
+  state = await loadState();
   elements.expenseDateInput.value = defaultDate;
   elements.monthlyIncomeInput.value = state.income;
   elements.expenseForm.addEventListener('submit', handleExpenseSubmit);
@@ -52,7 +62,23 @@ function initialize() {
   render();
 }
 
-function loadState() {
+async function loadState() {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('budget_data')
+        .select('*')
+        .eq('id', 'default')
+        .maybeSingle();
+
+      if (!error && data) {
+        return normalizeState(data);
+      }
+    } catch (error) {
+      console.warn('Supabase load failed, falling back to local storage.', error);
+    }
+  }
+
   const saved = localStorage.getItem(STORAGE_KEY);
 
   if (!saved) {
@@ -61,18 +87,39 @@ function loadState() {
 
   try {
     const parsed = JSON.parse(saved);
-    return {
-      income: Number(parsed.income) || defaultState.income,
-      categories: Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : defaultCategories,
-      expenses: Array.isArray(parsed.expenses) ? parsed.expenses : []
-    };
+    return normalizeState(parsed);
   } catch (error) {
     return cloneData(defaultState);
   }
 }
 
-function saveState() {
+function normalizeState(payload) {
+  const source = payload || {};
+  return {
+    income: Number(source.income) || defaultState.income,
+    categories: Array.isArray(source.categories) && source.categories.length ? source.categories : defaultCategories,
+    expenses: Array.isArray(source.expenses) ? source.expenses : []
+  };
+}
+
+async function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+  if (!supabase) {
+    return;
+  }
+
+  try {
+    await supabase.from('budget_data').upsert({
+      id: 'default',
+      income: Number(state.income) || 0,
+      categories: state.categories,
+      expenses: state.expenses,
+      updated_at: new Date().toISOString()
+    });
+  } catch (error) {
+    console.warn('Supabase save failed.', error);
+  }
 }
 
 function render() {
