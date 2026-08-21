@@ -74,6 +74,17 @@ async function loadState() {
       if (!error && data) {
         return normalizeState(data);
       }
+
+      const localSaved = localStorage.getItem(STORAGE_KEY);
+      if (localSaved) {
+        try {
+          const localState = normalizeState(JSON.parse(localSaved));
+          await saveStateFromData(localState);
+          return localState;
+        } catch (localError) {
+          console.warn('Unable to mirror local state to Supabase.', localError);
+        }
+      }
     } catch (error) {
       console.warn('Supabase load failed, falling back to local storage.', error);
     }
@@ -104,7 +115,15 @@ function normalizeState(payload) {
 
 async function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  await saveStateToSupabase(state);
+}
 
+async function saveStateFromData(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  await saveStateToSupabase(data);
+}
+
+async function saveStateToSupabase(data) {
   if (!supabase) {
     return;
   }
@@ -112,9 +131,9 @@ async function saveState() {
   try {
     await supabase.from('budget_data').upsert({
       id: 'default',
-      income: Number(state.income) || 0,
-      categories: state.categories,
-      expenses: state.expenses,
+      income: Number(data.income) || 0,
+      categories: data.categories,
+      expenses: data.expenses,
       updated_at: new Date().toISOString()
     });
   } catch (error) {
