@@ -14,12 +14,14 @@ const defaultCategories = [
 
 const defaultState = {
   income: 3500,
+  balance: 0,
   expenses: [
     { id: 1, description: 'Rent', category: 'housing', amount: 1200, date: todayISO() },
     { id: 2, description: 'Groceries', category: 'food', amount: 180, date: todayISO() },
     { id: 3, description: 'Fuel', category: 'transport', amount: 65, date: todayISO() }
   ],
-  categories: defaultCategories
+  categories: defaultCategories,
+  bills: []
 };
 
 const supabaseConfig = window.BUDGET_SUPABASE_CONFIG || {};
@@ -55,7 +57,21 @@ const elements = {
   categoryList: document.querySelector('#categoryList'),
   expenseList: document.querySelector('#expenseList'),
   resetDataBtn: document.querySelector('#resetDataBtn'),
-  statusStamp: document.querySelector('#statusStamp')
+  statusStamp: document.querySelector('#statusStamp'),
+  balanceInput: document.querySelector('#balanceInput'),
+  saveBalanceBtn: document.querySelector('#saveBalanceBtn'),
+  freeToSpendValue: document.querySelector('#freeToSpendValue'),
+  billForm: document.querySelector('#billForm'),
+  billNameInput: document.querySelector('#billNameInput'),
+  billAmountInput: document.querySelector('#billAmountInput'),
+  billDueDateInput: document.querySelector('#billDueDateInput'),
+  billRecurringInput: document.querySelector('#billRecurringInput'),
+  billList: document.querySelector('#billList'),
+  affordForm: document.querySelector('#affordForm'),
+  affordDescriptionInput: document.querySelector('#affordDescriptionInput'),
+  affordAmountInput: document.querySelector('#affordAmountInput'),
+  affordCategorySelect: document.querySelector('#affordCategorySelect'),
+  affordResult: document.querySelector('#affordResult')
 };
 
 initialize();
@@ -73,10 +89,14 @@ async function initialize() {
   state = normalizeState(state);
 
   elements.expenseDateInput.value = defaultDate;
+  elements.billDueDateInput.value = defaultDate;
   elements.monthlyIncomeInput.value = state.income;
   elements.expenseForm.addEventListener('submit', handleExpenseSubmit);
   elements.saveIncomeBtn.addEventListener('click', saveIncome);
   elements.resetDataBtn.addEventListener('click', resetAll);
+  elements.saveBalanceBtn.addEventListener('click', saveBalance);
+  elements.billForm.addEventListener('submit', handleAddBill);
+  elements.affordForm.addEventListener('submit', handleAffordabilityCheck);
   render();
 }
 
@@ -134,8 +154,10 @@ function normalizeState(payload) {
   const source = payload || {};
   return {
     income: Number(source.income) || defaultState.income,
+    balance: Number.isFinite(Number(source.balance)) ? Number(source.balance) : defaultState.balance,
     categories: mergeCategories(source.categories),
-    expenses: Array.isArray(source.expenses) ? source.expenses : []
+    expenses: Array.isArray(source.expenses) ? source.expenses : [],
+    bills: Array.isArray(source.bills) ? source.bills : []
   };
 }
 
@@ -173,8 +195,10 @@ async function saveStateToSupabase(data) {
     await supabaseClient.from('budget_data').upsert({
       id: 'default',
       income: Number(data.income) || 0,
+      balance: Number(data.balance) || 0,
       categories: data.categories,
       expenses: data.expenses,
+      bills: data.bills,
       updated_at: new Date().toISOString()
     });
   } catch (error) {
@@ -184,23 +208,34 @@ async function saveStateToSupabase(data) {
 
 function render() {
   elements.monthlyIncomeInput.value = state.income;
+  elements.balanceInput.value = state.balance;
   populateCategoryOptions();
   renderSummary();
   renderCategories();
   renderExpenses();
+  renderBills();
+  renderFreeToSpend();
 }
 
 function populateCategoryOptions() {
-  const selected = elements.categorySelect.value || state.categories[0]?.id || '';
-  elements.categorySelect.innerHTML = state.categories
-    .map(
-      (category) =>
-        `<option value="${category.id}">${category.name}</option>`
-    )
-    .join('');
+  populateSelect(elements.categorySelect);
+  populateSelect(elements.affordCategorySelect, true);
+}
+
+function populateSelect(selectEl, includeBlank) {
+  if (!selectEl) {
+    return;
+  }
+
+  const selected = selectEl.value || (includeBlank ? '' : state.categories[0]?.id || '');
+  const blankOption = includeBlank ? '<option value="">No category</option>' : '';
+
+  selectEl.innerHTML =
+    blankOption +
+    state.categories.map((category) => `<option value="${category.id}">${category.name}</option>`).join('');
 
   if (selected && state.categories.some((category) => category.id === selected)) {
-    elements.categorySelect.value = selected;
+    selectEl.value = selected;
   }
 }
 
@@ -353,6 +388,168 @@ function saveIncome() {
   state.income = Number.isFinite(nextIncome) && nextIncome >= 0 ? nextIncome : state.income;
   saveState();
   render();
+}
+
+function saveBalance() {
+  const nextBalance = Number(elements.balanceInput.value);
+  state.balance = Number.isFinite(nextBalance) ? nextBalance : state.balance;
+  saveState();
+  render();
+}
+
+function getUnpaidBillsTotal() {
+  return state.bills
+    .filter((bill) => !bill.paid)
+    .reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
+}
+
+function getFreeToSpend() {
+  return state.balance - getUnpaidBillsTotal();
+}
+
+function renderFreeToSpend() {
+  if (!elements.freeToSpendValue) {
+    return;
+  }
+  elements.freeToSpendValue.textContent = formatMoney(getFreeToSpend());
+}
+
+function renderBills() {
+  if (!elements.billList) {
+    return;
+  }
+
+  const sortedBills = [...state.bills].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+  if (!sortedBills.length) {
+    elements.billList.innerHTML = '<li class="empty-state">No upcoming bills tracked. Add one below.</li>';
+    return;
+  }
+
+  elements.billList.innerHTML = sortedBills
+    .map(
+      (bill) => `
+        <li class="bill-item ${bill.paid ? 'paid' : ''}">
+          <div class="bill-info">
+            <span class="bill-name">${escapeHtml(bill.name)}${bill.recurring ? ' <span class="bill-recurring">(monthly)</span>' : ''}</span>
+            <span class="bill-meta">${formatMoney(bill.amount)} &middot; due ${formatDate(bill.dueDate)}</span>
+          </div>
+          <button type="button" class="bill-toggle" data-toggle-id="${bill.id}">${bill.paid ? 'Mark unpaid' : 'Mark paid'}</button>
+          <button type="button" class="delete-button" data-delete-bill-id="${bill.id}">Remove</button>
+        </li>
+      `
+    )
+    .join('');
+
+  elements.billList.querySelectorAll('[data-toggle-id]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      toggleBillPaid(Number(event.target.dataset.toggleId));
+    });
+  });
+
+  elements.billList.querySelectorAll('[data-delete-bill-id]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      const id = Number(event.target.dataset.deleteBillId);
+      state.bills = state.bills.filter((bill) => bill.id !== id);
+      saveState();
+      render();
+    });
+  });
+}
+
+function handleAddBill(event) {
+  event.preventDefault();
+
+  const name = elements.billNameInput.value.trim();
+  const amount = Number(elements.billAmountInput.value);
+  const dueDate = elements.billDueDateInput.value || todayISO();
+  const recurring = elements.billRecurringInput.checked;
+
+  if (!name || !amount || amount <= 0) {
+    return;
+  }
+
+  state.bills.push({
+    id: Date.now(),
+    name,
+    amount,
+    dueDate,
+    recurring,
+    paid: false
+  });
+
+  saveState();
+  elements.billForm.reset();
+  elements.billDueDateInput.value = todayISO();
+  render();
+}
+
+function toggleBillPaid(id) {
+  const bill = state.bills.find((item) => item.id === id);
+  if (!bill) {
+    return;
+  }
+
+  if (!bill.paid && bill.recurring) {
+    bill.dueDate = addOneMonth(bill.dueDate);
+    bill.paid = false;
+  } else {
+    bill.paid = !bill.paid;
+  }
+
+  saveState();
+  render();
+}
+
+function handleAffordabilityCheck(event) {
+  event.preventDefault();
+
+  const description = elements.affordDescriptionInput.value.trim() || 'This purchase';
+  const amount = Number(elements.affordAmountInput.value);
+  const categoryId = elements.affordCategorySelect.value;
+
+  if (!amount || amount <= 0) {
+    return;
+  }
+
+  const freeToSpend = getFreeToSpend();
+  const afterPurchase = freeToSpend - amount;
+  const canAfford = afterPurchase >= 0;
+
+  let categoryNote = '';
+  if (categoryId) {
+    const category = state.categories.find((item) => item.id === categoryId);
+    if (category) {
+      const spent = getCategorySpent(categoryId);
+      const budget = Number(category.budget || 0);
+      const remainingBudget = budget - spent;
+      const afterCategorySpend = remainingBudget - amount;
+      categoryNote = `
+        <div class="afford-note ${afterCategorySpend < 0 ? 'warning' : ''}">
+          This would use ${formatMoney(amount)} of your ${formatMoney(remainingBudget)} remaining ${escapeHtml(category.name)} budget,
+          leaving ${formatMoney(afterCategorySpend)}${afterCategorySpend < 0 ? ' (over budget for this category)' : ''}.
+        </div>
+      `;
+    }
+  }
+
+  elements.affordResult.innerHTML = `
+    <div class="afford-headline ${canAfford ? 'good' : 'danger'}">${canAfford ? 'Yes, you can afford it' : 'Not right now'}</div>
+    <div class="afford-breakdown">
+      <div><span>Cash on hand</span><span>${formatMoney(state.balance)}</span></div>
+      <div><span>Upcoming unpaid bills</span><span>&minus; ${formatMoney(getUnpaidBillsTotal())}</span></div>
+      <div class="subtotal"><span>Free to spend</span><span>${formatMoney(freeToSpend)}</span></div>
+      <div><span>${escapeHtml(description)}</span><span>&minus; ${formatMoney(amount)}</span></div>
+      <div class="total"><span>Left after</span><span>${formatMoney(afterPurchase)}</span></div>
+    </div>
+    ${categoryNote}
+  `;
+}
+
+function addOneMonth(dateString) {
+  const date = new Date(dateString + 'T00:00:00');
+  date.setMonth(date.getMonth() + 1);
+  return date.toISOString().slice(0, 10);
 }
 
 function resetAll() {

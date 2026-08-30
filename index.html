@@ -46,6 +46,17 @@
             <button id="saveIncomeBtn" class="primary-button" type="button">Save income</button>
           </div>
 
+          <div class="hero-header balance-row">
+            <div>
+              <p class="label">Cash on hand</p>
+              <div class="income-row">
+                <span class="currency">$</span>
+                <input id="balanceInput" type="number" step="0.01" value="0" aria-label="Cash on hand" />
+              </div>
+            </div>
+            <button id="saveBalanceBtn" class="primary-button" type="button">Save balance</button>
+          </div>
+
           <div class="summary-grid">
             <article class="summary-cell">
               <span>Budgeted</span>
@@ -59,7 +70,41 @@
               <span>Left</span>
               <strong id="leftValue">$0.00</strong>
             </article>
+            <article class="summary-cell">
+              <span>Free to spend</span>
+              <strong id="freeToSpendValue">$0.00</strong>
+            </article>
           </div>
+        </section>
+
+        <section class="panel card panel-afford">
+          <div class="panel-header">
+            <p class="eyebrow">Ask the ledger</p>
+            <h2>Can I afford this?</h2>
+          </div>
+
+          <form id="affordForm" class="expense-form">
+            <div class="field-group">
+              <label for="affordDescriptionInput">What are you checking?</label>
+              <input id="affordDescriptionInput" type="text" placeholder="Date night" />
+            </div>
+
+            <div class="field-row">
+              <div class="field-group">
+                <label for="affordAmountInput">Amount</label>
+                <input id="affordAmountInput" type="number" min="0" step="0.01" placeholder="0.00" required />
+              </div>
+
+              <div class="field-group">
+                <label for="affordCategorySelect">Category (optional)</label>
+                <select id="affordCategorySelect"></select>
+              </div>
+            </div>
+
+            <button class="primary-button full-width" type="submit">Check</button>
+          </form>
+
+          <div id="affordResult" class="afford-result"></div>
         </section>
 
         <section class="panel card panel-form">
@@ -106,6 +151,41 @@
             <span>Budget</span>
           </div>
           <div id="categoryList" class="category-list"></div>
+        </section>
+
+        <section class="panel card panel-bills">
+          <div class="panel-header">
+            <p class="eyebrow">Commitments</p>
+            <h2>Upcoming bills</h2>
+          </div>
+
+          <ul id="billList" class="bill-list"></ul>
+
+          <form id="billForm" class="expense-form bill-form">
+            <div class="field-group">
+              <label for="billNameInput">Bill</label>
+              <input id="billNameInput" type="text" placeholder="Rent" required />
+            </div>
+
+            <div class="field-row">
+              <div class="field-group">
+                <label for="billAmountInput">Amount</label>
+                <input id="billAmountInput" type="number" min="0" step="0.01" placeholder="0.00" required />
+              </div>
+
+              <div class="field-group">
+                <label for="billDueDateInput">Due date</label>
+                <input id="billDueDateInput" type="date" required />
+              </div>
+            </div>
+
+            <label class="checkbox-row">
+              <input id="billRecurringInput" type="checkbox" />
+              <span>Repeats monthly</span>
+            </label>
+
+            <button class="primary-button full-width" type="submit">Add bill</button>
+          </form>
         </section>
 
         <section class="panel card panel-register">
